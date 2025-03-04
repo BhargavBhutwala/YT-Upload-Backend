@@ -1,10 +1,16 @@
 package com.ai.backend.services;
 
 import java.io.IOException;
+import java.util.Map;
 
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.client.http.ByteArrayContent;
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequest;
@@ -24,6 +30,12 @@ public class YoutubeVideoUpload {
    public static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
 
    public static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
+
+   private ChatClient client;
+
+   public YoutubeVideoUpload(ChatClient.Builder builder) {
+      this.client = builder.build();
+   }
 
    public String uploadVideo(String title, String description, String visibility, MultipartFile videoFile,
          String accessToken)
@@ -64,5 +76,32 @@ public class YoutubeVideoUpload {
 
       return "Video Uploaded Successfully!";
 
+   }
+
+   public Map<String, Object> generateVideoMetadata(String title) throws JsonMappingException, JsonProcessingException {
+
+      String prompt = "Generate video metadata in JSON format for a video with the title: \"" + title + "\"."
+            + "Include the following fields: title (rephrase the title), description (a brief description), tags (an array of strings)."
+            + "Return only the JSON object.";
+
+      String response = client.prompt(prompt).call().content();
+
+      System.out.println(response);
+
+      // Trim and remove any markdown code fences or backticks if present
+      response = response.trim();
+      if (response.startsWith("```")) {
+         // Remove starting and ending code fences (e.g., ```json and ```)
+         response = response.replaceAll("^```(json)?", "").replaceAll("```$", "").trim();
+      } else if (response.startsWith("`")) {
+         response = response.replaceAll("^`", "").replaceAll("`$", "").trim();
+      }
+
+      // Parse the JSON response into a Map
+      ObjectMapper mapper = new ObjectMapper();
+      Map<String, Object> metaData = mapper.readValue(response, new TypeReference<Map<String, Object>>() {
+      });
+
+      return metaData;
    }
 }
